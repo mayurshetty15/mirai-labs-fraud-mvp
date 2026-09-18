@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.db_postgres import get_postgres_connection
 
-DATA_PATH = PROJECT_ROOT / "data" / "creditcard_augmented.csv"
+DATA_PATH = PROJECT_ROOT / "data" / "creditcard_augmented_v2.csv"
 V_COLUMNS = [f"V{i}" for i in range(1, 29)]
 SEED_CARD_LIMIT = 400
 SEED_ROW_LIMIT = 25_000

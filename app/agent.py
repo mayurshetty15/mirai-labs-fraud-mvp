@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -23,11 +24,18 @@ from app.tools import (
     get_transaction,
     get_velocity,
 )
+from app.layer5_decision import combine_scores
 from app.time_utils import format_dataset_date, format_dataset_time
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 MAX_TOOL_CALLS = 5
+PROMPT_INJECTION_PATTERN = re.compile(
+    r"ignore\s+(?:all\s+)?previous\s+instructions|"
+    r"disregard\s+(?:all\s+)?previous\s+instructions|"
+    r"approve\s+this\s+transaction\s+immediately",
+    re.IGNORECASE,
+)
 HYPOTHESES = (
     "card_testing",
     "account_takeover",
@@ -103,11 +111,44 @@ def _as_of_datetime(transaction: dict[str, Any]) -> datetime:
         if isinstance(value, datetime):
             return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
         try:
+            return datetime.fromtimestamp(float(value), timezone.utc)
+        except (TypeError, ValueError, OverflowError):
+            pass
+        try:
             parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
             return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
         except ValueError:
             pass
     return datetime.fromtimestamp(float(transaction.get("time", 0)), timezone.utc)
+
+
+def _contains_prompt_injection(*values: Any) -> bool:
+    return any(PROMPT_INJECTION_PATTERN.search(str(value or "")) for value in values)
+
+
+def _fallback_result(
+    transaction: dict[str, Any],
+    model_risk_score: float,
+    reason: str,
+    injection_detected: bool,
+) -> dict[str, Any]:
+    decision = combine_scores(
+        bool(transaction.get("rules_flag")),
+        bool(transaction.get("graph_flag")),
+        model_risk_score,
+    )["decision"]
+    if injection_detected and decision == "allow":
+        decision = "review"
+    risk = max(0.0, min(1.0, float(model_risk_score)))
+    return {
+        "recommended_action": decision,
+        "confidence": 1.0 - risk if decision == "allow" else max(0.6, risk),
+        "evidence_summary": f"Rule-based fallback selected {decision} after agent unavailability.",
+        "hypothesis_accepted": None,
+        "hypothesis_rejected_reasons": [],
+        "escalation_reason": reason,
+        "injection_detected": injection_detected,
+    }
 
 
 @lru_cache(maxsize=1)
@@ -233,7 +274,17 @@ def investigate(
     ood, ood_reason = _is_out_of_distribution(transaction)
     trace: dict[str, Any] = {"transaction_id": transaction_id, "steps": [], "tool_calls": 0}
     safe_dispute = untrusted_text("dispute_message", transaction.get("dispute_message", ""))
-    safe_domain = untrusted_text("email_domain", transaction.get("purchaser_email_domain", ""))
+    safe_purchaser_domain = untrusted_text(
+        "purchaser_email_domain", transaction.get("purchaser_email_domain", "")
+    )
+    safe_recipient_domain = untrusted_text(
+        "recipient_email_domain", transaction.get("recipient_email_domain", "")
+    )
+    injection_detected = _contains_prompt_injection(
+        transaction.get("dispute_message"),
+        transaction.get("purchaser_email_domain"),
+        transaction.get("recipient_email_domain"),
+    )
     initial = {
         "transaction": {
             "amount": transaction.get("amount"),
@@ -243,20 +294,19 @@ def investigate(
             "risk_score": model_risk_score,
         },
         "model_explanation": model_explanation or {},
-        "untrusted_fields": [safe_dispute, safe_domain],
+        "untrusted_fields": [safe_dispute, safe_purchaser_domain, safe_recipient_domain],
+        "injection_detected": injection_detected,
         "allowed_hypotheses": HYPOTHESES,
     }
     trace["steps"].append({"type": "hypothesis_input", "input": initial})
 
     if not client.api_key:
-        result = {
-            "recommended_action": "escalate",
-            "confidence": 0.0,
-            "evidence_summary": "Gemini investigation was not run because GEMINI_API_KEY is missing.",
-            "hypothesis_accepted": None,
-            "hypothesis_rejected_reasons": ["LLM credentials are not configured."],
-            "escalation_reason": "LLM agent unavailable; human review required.",
-        }
+        result = _fallback_result(
+            transaction,
+            model_risk_score,
+            "Gemini investigation was not run because GEMINI_API_KEY is missing.",
+            injection_detected,
+        )
         trace["steps"].append({"type": "final_recommendation", "result": result})
         trace["result"] = result
         _persist_trace(transaction_id, trace)
@@ -293,7 +343,7 @@ def investigate(
                 contents.append({"role": "user", "parts": [{"text": f"Unknown tool {name}; choose an allowed tool."}]})
                 continue
             if "as_of" in args:
-                args["as_of"] = datetime.fromisoformat(str(args["as_of"]).replace("Z", "+00:00"))
+                args["as_of"] = _as_of_datetime({"as_of": args["as_of"]})
             output = _add_display_times(TOOL_FUNCTIONS[name](**args))
             trace["tool_calls"] += 1
             trace["steps"].append({"type": "tool_call", "tool": name, "input": {key: str(value) if isinstance(value, datetime) else value for key, value in args.items()}, "output": output})
@@ -302,9 +352,18 @@ def investigate(
 
         final = final or {"recommended_action": "escalate", "confidence": 0.0, "evidence_summary": "Agent did not produce a final structured decision.", "hypothesis_accepted": False, "hypothesis_rejected_reasons": ["No final response before tool-call limit."], "escalation_reason": "Bounded agent loop ended without a final decision."}
     except Exception as error:
-        final = {"recommended_action": "escalate", "confidence": 0.0, "evidence_summary": "Agent execution failed before a reliable recommendation was produced.", "hypothesis_accepted": False, "hypothesis_rejected_reasons": [str(error)], "escalation_reason": "Agent failure requires human review."}
+        final = _fallback_result(
+            transaction,
+            model_risk_score,
+            f"Gemini investigation failed; rule-based fallback used: {error}",
+            injection_detected,
+        )
         trace["steps"].append({"type": "agent_error", "error": str(error)})
 
+    final["injection_detected"] = injection_detected
+    if injection_detected and final.get("recommended_action") == "allow":
+        final["recommended_action"] = "review"
+        final["escalation_reason"] = "Prompt-injection content was detected in untrusted transaction text."
     confidence = float(final.get("confidence", 0.0) or 0.0)
     reasons = list(final.get("hypothesis_rejected_reasons") or [])
     if ood:

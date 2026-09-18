@@ -149,6 +149,8 @@ def transaction_by_card(card_id: str) -> dict[str, Any]:
             "amount": transaction["amount"],
             "purchaser_email_domain": transaction["purchaser_email_domain"],
             "recipient_email_domain": transaction["recipient_email_domain"],
+            "rules_flag": result.get("rules_flag", False),
+            "graph_flag": result.get("graph_flag", False),
         }
     except HTTPException:
         raise

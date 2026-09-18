@@ -5,3 +5,5 @@ venv/
 .vscode/
 
 data/creditcard_augmented.csv
+data/*.csv
+models/*.pkl
