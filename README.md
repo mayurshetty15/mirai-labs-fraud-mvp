@@ -122,6 +122,7 @@ NEO4J_PASSWORD=<neo4j-secret>
 # Optional. Without this, investigations explicitly escalate instead of
 # pretending that an LLM decision was produced.
 GEMINI_API_KEY=<gemini-secret>
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
 The checked-in `.env.example` must contain placeholders only. If any real credential has ever been committed or shared, revoke and rotate it before using the repository. Secret rotation is required even when the credential appears to be for development.

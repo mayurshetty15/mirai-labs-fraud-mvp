@@ -153,11 +153,15 @@ def _add_display_times(value: Any) -> Any:
 
 
 class GeminiClient:
-    """Small REST client for Gemini 2.0 Flash function calling."""
+    """Small REST client for configurable Gemini Flash function calling."""
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        self.model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+        self.url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.model}:generateContent"
+        )
 
     def generate(self, contents: list[dict[str, Any]], tools: bool = False) -> dict[str, Any]:
         if not self.api_key:
