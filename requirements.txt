@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+psycopg2-binary
+redis
+neo4j
+python-dotenv
+lightgbm
+scikit-learn
+shap
+pandas
+numpy
+streamlit
+requests

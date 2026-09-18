@@ -1,0 +1,9 @@
+{
+  "threshold": -0.06940177574934936,
+  "percentile": 5,
+  "features": [
+    "Time",
+    "Amount",
+    "activity_magnitude"
+  ]
+}
