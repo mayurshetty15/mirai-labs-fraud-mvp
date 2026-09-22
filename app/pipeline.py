@@ -9,13 +9,14 @@ import pandas as pd
 
 from app.layer1_rules import check_velocity
 from app.layer2_graph import get_device_card_count, record_transaction_link
-from app.layer3_model import MODEL_FEATURES, explain_prediction
+from app.layer3_model import CALIBRATED_MODEL_PATH, MODEL_FEATURES, explain_prediction
 from app.layer4_anomaly import score_anomaly
 from app.layer5_decision import combine_scores
+from app.thresholds import GBT_REVIEW_THRESHOLD
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-GBT_MODEL_PATH = PROJECT_ROOT / "models" / "gbt_model.pkl"
+GBT_MODEL_PATH = CALIBRATED_MODEL_PATH
 _GBT_MODEL_CACHE = None
 
 
@@ -61,13 +62,9 @@ def generate_plain_summary(case_result: dict[str, Any]) -> str:
     anomaly_score = case_result.get("anomaly_score")
     confidence = max(0, min(100, round(gbt_score * 100)))
     confidence_word = (
-        "highly confident"
-        if gbt_score > 0.9
-        else "confident"
-        if gbt_score >= 0.7
-        else "moderately confident"
-        if gbt_score >= 0.4
-        else "low confidence"
+        "elevated fraud risk"
+        if gbt_score >= GBT_REVIEW_THRESHOLD
+        else "low fraud risk"
     )
 
     signals = []
@@ -99,14 +96,14 @@ def generate_plain_summary(case_result: dict[str, Any]) -> str:
                 ),
             )
         )
-    if gbt_score >= 0.4:
+    if gbt_score >= GBT_REVIEW_THRESHOLD:
         signals.append(
             (
                 f"the transaction's characteristics matching historical fraud patterns "
-                f"with a {round(gbt_score * 100)}% model match",
+                f"with a {gbt_score:.3%} calibrated model probability",
                 (
-                    f"The trained risk model rates this transaction as a {round(gbt_score * 100)}% "
-                    "match to patterns seen in confirmed fraud cases."
+                    f"The calibrated risk model assigns this transaction a {gbt_score:.3%} "
+                    "fraud probability based on patterns seen in confirmed fraud cases."
                 ),
             )
         )

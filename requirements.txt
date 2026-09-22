@@ -6,6 +6,7 @@ neo4j
 python-dotenv
 lightgbm
 scikit-learn
+matplotlib
 shap
 pandas
 numpy

@@ -13,7 +13,7 @@ import pandas as pd
 
 from app.db_postgres import get_postgres_connection
 from app.lookup import get_unscored_transactions
-from app.layer3_model import MODEL_FEATURES
+from app.layer3_model import CALIBRATED_MODEL_PATH, MODEL_FEATURES
 from app.pipeline import run_pipeline
 
 
@@ -54,7 +54,7 @@ def score_batch() -> int:
         return 0
     scored = 0
     pending_updates = []
-    model = joblib.load(PROJECT_ROOT / "models" / "gbt_model.pkl")
+    model = joblib.load(CALIBRATED_MODEL_PATH)
     model_rows = []
     for row in rows:
         values = row["v_features"]

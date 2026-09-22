@@ -26,6 +26,7 @@ def main() -> int:
     print(f"Recall:     {metrics['recall']:.1%}")
     print(f"Precision:  {metrics['precision']:.1%}")
     print(f"PR-AUC:     {metrics['pr_auc']:.4f}")
+    print(f"Brier score: {metrics['brier_score']:.6f}")
     print("==============================================")
     return 0
 

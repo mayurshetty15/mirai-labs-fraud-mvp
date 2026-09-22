@@ -18,7 +18,7 @@ import pandas as pd
 from app.db_postgres import get_postgres_connection
 from app.db_redis import get_redis_client
 from app.layer1_rules import VELOCITY_KEY_PREFIX, VELOCITY_WINDOW_SECONDS
-from app.layer3_model import MODEL_FEATURES, explain_prediction
+from app.layer3_model import CALIBRATED_MODEL_PATH, MODEL_FEATURES, explain_prediction
 from app.lookup import get_card_history as lookup_card_history
 from app.lookup import get_transaction_by_card_id
 
@@ -232,7 +232,7 @@ def get_model_explanation(card_id: str) -> dict[str, Any]:
         "Amount": float(transaction["amount"]),
         **{f"V{i}": float(values.get(f"V{i}", 0.0)) for i in range(1, 29)},
     }
-    model = joblib.load(__import__("pathlib").Path(__file__).resolve().parent.parent / "models" / "gbt_model.pkl")
+    model = joblib.load(CALIBRATED_MODEL_PATH)
     contributions = explain_prediction(model, pd.Series(row), MODEL_FEATURES)
     return {
         "card_id": _mask(card_id),
