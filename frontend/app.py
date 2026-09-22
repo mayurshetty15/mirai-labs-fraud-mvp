@@ -1439,6 +1439,20 @@ def inject_light_mode(enabled: bool) -> None:
             .stButton > button { background: #FFFFFF !important; color: #243756 !important; border-color: #B7C6DE !important; }
             .stButton > button:hover { background: #F1F5FF !important; color: #273FB6 !important; border-color: #94A7E8 !important; box-shadow: 0 8px 18px rgba(46, 70, 138, 0.12) !important; }
             .stButton > button[kind="primary"], .st-key-find-card button { color: #FFFFFF !important; background: linear-gradient(110deg, #4C57C8, #6976E6) !important; }
+            .st-key-find-card button,
+            .st-key-find-card button * {
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
+            .st-key-find-card button:disabled {
+                color: #FFFFFF !important;
+                opacity: 1 !important;
+                filter: none !important;
+            }
+            .st-key-find-card button:disabled * {
+                color: #FFFFFF !important;
+                -webkit-text-fill-color: #FFFFFF !important;
+            }
             .metric-card, .signal-card, .ai-panel, .history-empty, .loading-state, .empty-state {
                 background: #FFFFFF;
                 border-color: #DCE3F0;
