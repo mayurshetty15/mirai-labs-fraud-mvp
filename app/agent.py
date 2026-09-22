@@ -137,12 +137,12 @@ def _fallback_result(
         bool(transaction.get("graph_flag")),
         model_risk_score,
     )["decision"]
-    if injection_detected and decision == "allow":
-        decision = "review"
+    if injection_detected:
+        decision = "escalate"
     risk = max(0.0, min(1.0, float(model_risk_score)))
     return {
         "recommended_action": decision,
-        "confidence": 1.0 - risk if decision == "allow" else max(0.6, risk),
+        "confidence": 0.0 if injection_detected else (1.0 - risk if decision == "allow" else max(0.6, risk)),
         "evidence_summary": f"Rule-based fallback selected {decision} after agent unavailability.",
         "hypothesis_accepted": None,
         "hypothesis_rejected_reasons": [],
@@ -361,8 +361,9 @@ def investigate(
         trace["steps"].append({"type": "agent_error", "error": str(error)})
 
     final["injection_detected"] = injection_detected
-    if injection_detected and final.get("recommended_action") == "allow":
-        final["recommended_action"] = "review"
+    if injection_detected:
+        final["recommended_action"] = "escalate"
+        final["confidence"] = 0.0
         final["escalation_reason"] = "Prompt-injection content was detected in untrusted transaction text."
     confidence = float(final.get("confidence", 0.0) or 0.0)
     reasons = list(final.get("hypothesis_rejected_reasons") or [])
