@@ -1,6 +1,7 @@
 """End-to-end fraud scoring pipeline."""
 
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from app.layer5_decision import combine_scores
 from app.thresholds import GBT_REVIEW_THRESHOLD
 
 
+logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GBT_MODEL_PATH = CALIBRATED_MODEL_PATH
 _GBT_MODEL_CACHE = None
@@ -181,6 +183,12 @@ def run_pipeline(
                 transaction["card_id"], transaction["time"]
             )
         except Exception as error:
+            logger.warning(
+                "Layer 1 failed for card_id=%s: %s",
+                transaction.get("card_id"),
+                error,
+                exc_info=True,
+            )
             errors.append(f"Layer 1 skipped: {error}")
 
         try:
@@ -189,6 +197,12 @@ def run_pipeline(
             device_card_count = card_count or 0
             graph_flag = card_count is not None and card_count > 3
         except Exception as error:
+            logger.warning(
+                "Layer 2 failed for card_id=%s: %s",
+                transaction.get("card_id"),
+                error,
+                exc_info=True,
+            )
             errors.append(f"Layer 2 skipped: {error}")
 
     try:
@@ -209,6 +223,12 @@ def run_pipeline(
             if include_explanation:
                 top_features = explain_prediction(model, model_row.iloc[0], MODEL_FEATURES)
     except Exception as error:
+        logger.warning(
+            "GBT model layer failed for card_id=%s: %s",
+            transaction.get("card_id"),
+            error,
+            exc_info=True,
+        )
         errors.append(f"Layer 3 skipped: {error}")
 
     try:
@@ -219,6 +239,12 @@ def run_pipeline(
         }
         anomaly_flag, anomaly_score = score_anomaly(anomaly_input)
     except Exception as error:
+        logger.warning(
+            "Layer 4 anomaly scoring failed for card_id=%s: %s",
+            transaction.get("card_id"),
+            error,
+            exc_info=True,
+        )
         errors.append(f"Layer 4 skipped: {error}")
 
     decision_result = combine_scores(rules_flag, graph_flag, gbt_score)
