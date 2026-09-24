@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import joblib
 import pandas as pd
@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GBT_MODEL_PATH = CALIBRATED_MODEL_PATH
 _GBT_MODEL_CACHE = None
+ProgressCallback = Callable[[str, str, str | None], None]
+
+
+def _notify_progress(
+    progress_callback: ProgressCallback | None,
+    stage: str,
+    status: str,
+    error: str | None = None,
+) -> None:
+    if progress_callback is not None:
+        progress_callback(stage, status, error)
 
 
 def _feature_values(transaction: dict[str, Any]) -> dict[str, float]:
@@ -158,6 +169,7 @@ def run_pipeline(
     include_explanation: bool = True,
     model: Any = None,
     precomputed_gbt_score: float | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Run fraud layers and return a resilient scoring result.
 
@@ -177,11 +189,14 @@ def run_pipeline(
     model_row = None
 
     if include_external_layers:
+        _notify_progress(progress_callback, "rules", "running")
         try:
             rules_flag, velocity_count = check_velocity(
                 transaction["card_id"], transaction["time"]
             )
+            _notify_progress(progress_callback, "rules", "completed")
         except Exception as error:
+            _notify_progress(progress_callback, "rules", "failed", str(error))
             logger.warning(
                 "Layer 1 failed for card_id=%s: %s",
                 transaction.get("card_id"),
@@ -190,12 +205,15 @@ def run_pipeline(
             )
             errors.append(f"Layer 1 skipped: {error}")
 
+        _notify_progress(progress_callback, "graph", "running")
         try:
             record_transaction_link(transaction["device_id"], transaction["card_id"])
             card_count = get_device_card_count(transaction["device_id"])
             device_card_count = card_count or 0
             graph_flag = card_count is not None and card_count > 3
+            _notify_progress(progress_callback, "graph", "completed")
         except Exception as error:
+            _notify_progress(progress_callback, "graph", "failed", str(error))
             logger.warning(
                 "Layer 2 failed for card_id=%s: %s",
                 transaction.get("card_id"),
@@ -204,6 +222,7 @@ def run_pipeline(
             )
             errors.append(f"Layer 2 skipped: {error}")
 
+    _notify_progress(progress_callback, "model", "running")
     try:
         if not GBT_MODEL_PATH.exists():
             raise FileNotFoundError(f"GBT model not found: {GBT_MODEL_PATH}")
@@ -219,9 +238,9 @@ def run_pipeline(
             model_row = _model_row(transaction)
             gbt_score = float(model.predict_proba(model_row)[0, 1])
             model_score_available = True
-            if include_explanation:
-                top_features = explain_prediction(model, model_row.iloc[0], MODEL_FEATURES)
+        _notify_progress(progress_callback, "model", "completed")
     except Exception as error:
+        _notify_progress(progress_callback, "model", "failed", str(error))
         logger.warning(
             "GBT model layer failed for card_id=%s: %s",
             transaction.get("card_id"),
@@ -230,6 +249,22 @@ def run_pipeline(
         )
         errors.append(f"Layer 3 skipped: {error}")
 
+    if include_explanation and model_row is not None and model_score_available:
+        _notify_progress(progress_callback, "shap", "running")
+        try:
+            top_features = explain_prediction(model, model_row.iloc[0], MODEL_FEATURES)
+            _notify_progress(progress_callback, "shap", "completed")
+        except Exception as error:
+            _notify_progress(progress_callback, "shap", "failed", str(error))
+            logger.warning(
+                "SHAP explanation failed for card_id=%s: %s",
+                transaction.get("card_id"),
+                error,
+                exc_info=True,
+            )
+            errors.append(f"SHAP explanation skipped: {error}")
+
+    _notify_progress(progress_callback, "anomaly", "running")
     try:
         anomaly_input = {
             "Time": transaction["time"],
@@ -237,7 +272,9 @@ def run_pipeline(
             **_feature_values(transaction),
         }
         anomaly_flag, anomaly_score = score_anomaly(anomaly_input)
+        _notify_progress(progress_callback, "anomaly", "completed")
     except Exception as error:
+        _notify_progress(progress_callback, "anomaly", "failed", str(error))
         logger.warning(
             "Layer 4 anomaly scoring failed for card_id=%s: %s",
             transaction.get("card_id"),

@@ -2,6 +2,7 @@
 
 from html import escape
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,24 @@ format_dataset_date = _time_utils.format_dataset_date
 format_dataset_time = _time_utils.format_dataset_time
 
 API_URL = "http://localhost:8001"
+
+INVESTIGATION_STAGES = (
+    ("initializing", "Initializing investigation"),
+    ("evidence", "Gathering evidence"),
+    ("risk", "Assessing risk"),
+    ("review", "Reviewing findings"),
+    ("prepare", "Preparing investigation result"),
+    ("complete", "Investigation complete"),
+)
+STAGE_LABELS = dict(INVESTIGATION_STAGES)
+TECHNICAL_STAGE_GROUPS = {
+    "signals": "evidence",
+    "rules": "evidence",
+    "graph": "evidence",
+    "anomaly": "risk",
+    "model": "risk",
+    "shap": "risk",
+}
 
 
 def api_get(path: str) -> Any:
@@ -312,80 +331,78 @@ def inject_fintech_theme() -> None:
                 font-weight: 700;
             }
 
-            .loading-state {
-                min-height: 520px;
-                padding: 2rem 1.25rem;
-                border: 1px solid #E4E4E7;
+            .investigation-progress {
+                padding: 1.35rem 1.25rem 1.15rem;
+                border: 1px solid #DCE7E9;
                 border-radius: 16px;
-                background: #FFFFFF;
-                box-shadow: 0 10px 24px rgba(18, 32, 51, 0.05);
+                background: linear-gradient(145deg, #FFFFFF, #F5FBFA);
+                box-shadow: 0 10px 24px rgba(18, 32, 51, 0.06);
             }
-
-            .loading-center {
+            .investigation-progress-header {
                 display: flex;
-                flex-direction: column;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 0.75rem;
+            }
+            .investigation-progress-kicker {
+                color: #0F766E;
+                font-size: 0.66rem;
+                font-weight: 800;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+            }
+            .investigation-progress-title {
+                margin-top: 0.18rem;
+                color: #10213F;
+                font-size: 1.15rem;
+                font-weight: 750;
+            }
+            .investigation-progress-count {
+                color: #64748B;
+                font-size: 0.76rem;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+            .investigation-stage-list { margin-top: 0.85rem; }
+            .investigation-stage {
+                display: flex;
                 align-items: center;
-                justify-content: center;
-                min-height: 175px;
-                text-align: center;
+                gap: 0.7rem;
+                min-height: 36px;
+                border-bottom: 1px solid #E8F0F0;
+                color: #64748B;
+                font-size: 0.83rem;
             }
-
-            .loading-spinner {
-                width: 40px;
-                height: 40px;
-                border: 3px solid #E4E4E7;
-                border-top-color: #0F766E;
-                border-right-color: #0F766E;
-                border-radius: 50%;
-                animation: spin 0.8s linear infinite;
-            }
-
-            .loading-message {
-                color: #71717A;
-                font-size: 0.95rem;
-                margin-top: 1rem;
-                animation: loadingMessageFade 1.2s ease-in-out infinite alternate;
-            }
-
-            .loading-skeleton-grid {
+            .investigation-stage:last-child { border-bottom: 0; }
+            .investigation-stage.running { color: #0F766E; font-weight: 700; }
+            .investigation-stage.completed { color: #334155; }
+            .investigation-stage.failed { color: #B42318; font-weight: 700; }
+            .investigation-stage-icon {
                 display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 0.8rem;
-                opacity: 0.55;
+                place-items: center;
+                flex: 0 0 20px;
+                width: 20px;
+                height: 20px;
+                border: 1px solid #CBD5E1;
+                border-radius: 50%;
+                color: #94A3B8;
+                font-size: 0.7rem;
+                font-weight: 800;
             }
-
-            .loading-skeleton-card {
-                min-height: 104px;
-                border: 1px solid #E4E4E7;
-                border-radius: 12px;
-                background: linear-gradient(90deg, #F4F4F5 25%, #FFFFFF 50%, #F4F4F5 75%);
-                background-size: 200% 100%;
-                animation: skeletonPulse 1.5s ease-in-out infinite;
+            .completed .investigation-stage-icon { border-color: #8AD8C2; background: #E8FBF5; color: #0F766E; }
+            .running .investigation-stage-icon { border-color: #71CFC0; background: #E8FBF5; color: #0F766E; }
+            .failed .investigation-stage-icon { border-color: #F0A7A0; background: #FFF1F0; color: #B42318; }
+            .investigation-stage-spinner {
+                width: 9px;
+                height: 9px;
+                border: 2px solid #A7E3D5;
+                border-top-color: #0F766E;
+                border-radius: 50%;
+                animation: investigationSpin 900ms linear infinite;
             }
-
-            .loading-skeleton-wide {
-                min-height: 126px;
-                margin-top: 0.9rem;
-                border: 1px solid #E4E4E7;
-                border-radius: 12px;
-                background: linear-gradient(90deg, #F4F4F5 25%, #FFFFFF 50%, #F4F4F5 75%);
-                background-size: 200% 100%;
-                animation: skeletonPulse 1.5s ease-in-out infinite;
-            }
-
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-
-            @keyframes loadingMessageFade {
-                from { opacity: 0.55; }
-                to { opacity: 1; }
-            }
-
-            @keyframes skeletonPulse {
-                0%, 100% { background-position: 200% 0; opacity: 0.4; }
-                50% { background-position: -200% 0; opacity: 0.7; }
-            }
+            .investigation-stage-error { margin: 0.2rem 0 0.7rem 2.2rem; color: #B42318; font-size: 0.73rem; }
+            @keyframes investigationSpin { to { transform: rotate(360deg); } }
 
             .metric-card,
             .signal-card,
@@ -1342,9 +1359,12 @@ def inject_fintech_theme() -> None:
             .case-focus-amount { position: relative; z-index: 1; text-align: right; color: #fff; font-size: 1.28rem; font-weight: 800; letter-spacing: -0.03em; }
             .case-focus-amount span { display: block; color: #9ba9c9; font-size: 0.63rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
 
-            .loading-state { background: linear-gradient(145deg, rgba(25, 34, 61, 0.9), rgba(10, 16, 31, 0.9)); border-color: rgba(152, 164, 217, 0.18); }
-            .loading-message { color: #b9c5e1; }
-            .loading-skeleton-card, .loading-skeleton-wide { border-color: rgba(152, 164, 217, 0.16); background: linear-gradient(90deg, rgba(55, 66, 103, 0.4) 25%, rgba(119, 107, 235, 0.28) 50%, rgba(55, 66, 103, 0.4) 75%); }
+            .investigation-progress { background: linear-gradient(145deg, rgba(25, 34, 61, 0.9), rgba(10, 16, 31, 0.9)); border-color: rgba(152, 164, 217, 0.18); }
+            .investigation-progress-title { color: #F8FAFC; }
+            .investigation-progress-count, .investigation-stage { color: #B9C5E1; }
+            .investigation-stage { border-color: rgba(152, 164, 217, 0.16); }
+            .investigation-stage.completed { color: #D9E4F5; }
+            .investigation-stage.running { color: #8AF3DB; }
             [data-testid="stDataFrame"] { border: 1px solid rgba(152, 164, 217, 0.16); border-radius: 14px; overflow: hidden; }
             [data-testid="stCaptionContainer"] { color: #7f8bad !important; }
 
@@ -1443,7 +1463,7 @@ def inject_light_mode(enabled: bool) -> None:
                 color: #FFFFFF !important;
                 -webkit-text-fill-color: #FFFFFF !important;
             }
-            .metric-card, .signal-card, .ai-panel, .history-empty, .loading-state, .empty-state {
+            .metric-card, .signal-card, .ai-panel, .history-empty, .investigation-progress, .empty-state {
                 background: #FFFFFF;
                 border-color: #DCE3F0;
                 box-shadow: 0 12px 26px rgba(23, 44, 80, 0.07);
@@ -1474,8 +1494,12 @@ def inject_light_mode(enabled: bool) -> None:
             .case-focus { background: linear-gradient(110deg, #F0F2FF, #FFFFFF 54%, #EDFDFC); border-color: #CBD4F5; box-shadow: 0 12px 26px rgba(23, 44, 80, 0.08); }
             .case-focus-title, .case-focus-amount { color: #10213F; }
             .case-focus-meta, .case-focus-amount span { color: #4B5F80; }
-            .loading-message { color: #4B5F80; }
-            .loading-skeleton-card, .loading-skeleton-wide { border-color: #DCE3F0; background: linear-gradient(90deg, #EEF2F8 25%, #FFFFFF 50%, #EEF2F8 75%); }
+            .investigation-progress { background: linear-gradient(145deg, #FFFFFF, #F4FAFA); border-color: #DCE3F0; }
+            .investigation-progress-title { color: #10213F; }
+            .investigation-progress-count, .investigation-stage { color: #5C6F8E; }
+            .investigation-stage { border-color: #E3EAF2; }
+            .investigation-stage.completed { color: #344562; }
+            .investigation-stage.running { color: #087568; }
             [data-testid="stDataFrame"] { border-color: #DCE3F0; }
         </style>
         """,
@@ -1649,31 +1673,170 @@ def animate_card_id_placeholder() -> None:
     )
 
 
-def render_loading_state(target: Any) -> None:
-    """Render the in-place transaction and history loading state."""
-    target.markdown(
-        """
-        <div class="loading-state">
-            <div class="loading-center">
-                <div class="loading-spinner" aria-label="Loading transaction"></div>
-                <div class="loading-message">Pulling transaction history...</div>
-            </div>
-            <div class="loading-skeleton-grid" aria-hidden="true">
-                <div class="loading-skeleton-card"></div>
-                <div class="loading-skeleton-card"></div>
-                <div class="loading-skeleton-card"></div>
-            </div>
-            <div class="loading-skeleton-grid" aria-hidden="true" style="margin-top: 0.9rem;">
-                <div class="loading-skeleton-card"></div>
-                <div class="loading-skeleton-card"></div>
-                <div class="loading-skeleton-card"></div>
-            </div>
-            <div class="loading-skeleton-wide" aria-hidden="true"></div>
-            <div class="loading-skeleton-wide" aria-hidden="true"></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+class InvestigationProgress:
+    """Render backend-driven investigation stages in a single replaceable panel."""
+
+    def __init__(self, target: Any) -> None:
+        self.placeholder = target.empty()
+        self.statuses = {stage: "pending" for stage, _ in INVESTIGATION_STAGES}
+        self.errors: dict[str, str] = {}
+        self.display_stage_status()
+
+    def start_stage(self, stage: str) -> None:
+        self.statuses[stage] = "running"
+        self.display_stage_status()
+
+    def complete_stage(self, stage: str) -> None:
+        self.statuses[stage] = "completed"
+        self.display_stage_status()
+
+    def fail_stage(self, stage: str, message: str) -> None:
+        self.statuses[stage] = "failed"
+        self.errors[stage] = {
+            "initializing": "We couldn't start this investigation. Please try again.",
+            "evidence": "We couldn't gather all of the transaction evidence. Please try again.",
+            "risk": "We couldn't complete the risk assessment. Please try again.",
+            "review": "We couldn't finish reviewing the findings. Please try again.",
+            "prepare": "We couldn't prepare the investigation result. Please try again.",
+            "complete": "The investigation did not finish successfully. Please try again.",
+        }.get(stage, message)
+        self.display_stage_status()
+
+    def fail_active_stage(self, message: str) -> None:
+        active_stage = next(
+            (stage for stage, status in self.statuses.items() if status == "running"),
+            "prepare",
+        )
+        self.fail_stage(active_stage, message)
+
+    def display_stage_status(self) -> None:
+        completed = sum(status == "completed" for status in self.statuses.values())
+        active_stage = next(
+            (stage for stage, status in self.statuses.items() if status == "running"),
+            None,
+        )
+        failed = any(status == "failed" for status in self.statuses.values())
+        next_stage = next(
+            (stage for stage, status in self.statuses.items() if status == "pending"),
+            None,
+        )
+        if failed:
+            headline = "Investigation stopped"
+        elif completed == len(INVESTIGATION_STAGES):
+            headline = "Investigation complete"
+        elif active_stage is not None:
+            headline = STAGE_LABELS[active_stage]
+        else:
+            headline = STAGE_LABELS[next_stage or "initializing"]
+        with self.placeholder.container():
+            st.markdown(
+                f"<div class='investigation-progress'>"
+                "<div class='investigation-progress-header'>"
+                "<div><div class='investigation-progress-kicker'>Investigation in progress</div>"
+                f"<div class='investigation-progress-title'>{escape(headline)}</div></div>"
+                f"<div class='investigation-progress-count'>{completed} of {len(INVESTIGATION_STAGES)} complete</div>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
+            st.progress(completed / len(INVESTIGATION_STAGES))
+            rows = ["<div class='investigation-stage-list'>"]
+            for stage, label in INVESTIGATION_STAGES:
+                status = self.statuses[stage]
+                icon = {
+                    "pending": "&#8226;",
+                    "running": "<span class='investigation-stage-spinner'></span>",
+                    "completed": "&#10003;",
+                    "failed": "&#10005;",
+                }[status]
+                rows.append(
+                    f"<div class='investigation-stage {status}'>"
+                    f"<span class='investigation-stage-icon'>{icon}</span>"
+                    f"<span>{escape(label)}</span></div>"
+                )
+                if status == "failed":
+                    rows.append(
+                        f"<div class='investigation-stage-error'>{escape(self.errors[stage])}</div>"
+                    )
+            rows.append("</div></div>")
+            st.markdown("".join(rows), unsafe_allow_html=True)
+
+    def handle_event(self, event: dict[str, Any]) -> None:
+        if event.get("type") != "stage":
+            return
+        stage = str(event.get("stage", ""))
+        status = str(event.get("status", ""))
+        if stage == "initializing":
+            presentation_stage = "initializing"
+            if status == "running":
+                self.start_stage(presentation_stage)
+            elif status == "completed":
+                self.complete_stage(presentation_stage)
+            elif status == "failed":
+                self.fail_stage(presentation_stage, "initialization failed")
+            return
+
+        if stage in TECHNICAL_STAGE_GROUPS:
+            presentation_stage = TECHNICAL_STAGE_GROUPS[stage]
+            if status == "running":
+                self.start_stage(presentation_stage)
+            elif status == "failed":
+                self.fail_stage(presentation_stage, "investigation stage failed")
+            elif status == "completed":
+                terminal_stage = {
+                    "graph": "evidence",
+                    "shap": "risk",
+                }.get(stage)
+                if terminal_stage:
+                    self.complete_stage(terminal_stage)
+            return
+
+        if stage == "final":
+            if status == "running":
+                if self.statuses["risk"] == "running":
+                    self.complete_stage("risk")
+                self.start_stage("review")
+            elif status == "completed":
+                self.complete_stage("review")
+                self.start_stage("prepare")
+            elif status == "failed":
+                self.fail_stage("review", "findings review failed")
+
+    def handle_result(self) -> None:
+        self.complete_stage("prepare")
+        self.complete_stage("complete")
+
+    def display_completion(self) -> None:
+        self.display_stage_status()
+
+
+def investigate_with_progress(card_id: str, target: Any) -> dict[str, Any]:
+    """Consume the streamed investigation and return the unchanged case payload."""
+    progress = InvestigationProgress(target)
+    case: dict[str, Any] | None = None
+    with requests.get(
+        f"{API_URL}/transaction/{card_id}/progress",
+        stream=True,
+        timeout=(10, 300),
+    ) as response:
+        response.raise_for_status()
+        for line in response.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            event = json.loads(line[5:].strip())
+            progress.handle_event(event)
+            if event.get("type") == "error":
+                if not any(status == "failed" for status in progress.statuses.values()):
+                    progress.fail_active_stage("investigation failed")
+                raise requests.RequestException(
+                    "The investigation could not be completed. Please try again."
+                )
+            if event.get("type") == "result":
+                progress.handle_result()
+                case = event.get("case")
+    if case is None:
+        raise requests.RequestException("The investigation ended without a result.")
+    progress.display_completion()
+    return case
 
 
 def render_queue(queue: list[dict[str, Any]]) -> None:
@@ -1705,7 +1868,7 @@ def render_queue(queue: list[dict[str, Any]]) -> None:
         st.markdown("</div>", unsafe_allow_html=True)
         if open_case:
             try:
-                st.session_state.case = api_get(f"/transaction/{card_id}")
+                st.session_state.case = investigate_with_progress(card_id, st.container())
             except requests.RequestException as error:
                 st.error(f"Transaction lookup failed: {error}")
 
@@ -2015,9 +2178,8 @@ with left:
     search_requested = st.button("Begin investigation", key="find-card", type="primary", use_container_width=True) and bool(search_card.strip())
 
 if search_requested:
-    render_loading_state(main_content)
     try:
-        st.session_state.case = api_get(f"/transaction/{search_card.strip()}")
+        st.session_state.case = investigate_with_progress(search_card.strip(), main_content)
     except requests.RequestException as error:
         with main_content:
             st.error(f"Card lookup failed: {error}")
