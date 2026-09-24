@@ -1276,15 +1276,6 @@ def inject_fintech_theme() -> None:
             .decision-command-label { display: block; color: #c0c9df; font-size: 0.63rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
             .decision-command-title { margin: 0.18rem 0 0.2rem; color: #fff; font-size: clamp(1.25rem, 2vw, 1.65rem); font-weight: 850; letter-spacing: -0.04em; }
             .decision-command-copy p { max-width: 600px; margin: 0; color: #c0c9df; font-size: 0.82rem; line-height: 1.45; }
-            .decision-score { position: relative; z-index: 1; min-width: 122px; padding-left: 1.15rem; border-left: 1px solid rgba(255,255,255,0.16); }
-            .decision-score-value { color: #fff; font-size: 1.55rem; font-weight: 850; line-height: 1; letter-spacing: -0.05em; }
-            .decision-score-label { margin-top: 0.35rem; color: #bdc7df; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-            .decision-progress { height: 4px; margin-top: 0.62rem; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.14); }
-            .decision-progress span { display: block; height: 100%; border-radius: inherit; animation: confidenceFill 900ms 280ms cubic-bezier(.2,.9,.2,1) both; transform-origin: left; }
-            .decision-command.allow .decision-progress span { background: #65e6a1; }
-            .decision-command.review .decision-progress span { background: #ffc95f; }
-            .decision-command.block .decision-progress span { background: #ff7891; }
-            @keyframes confidenceFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
             .empty-state {
                 min-height: 406px;
@@ -1373,7 +1364,6 @@ def inject_fintech_theme() -> None:
                 .workspace-heading h1 { font-size: 2.2rem; }
                 .empty-state { min-height: 320px; padding: 1.5rem; }
                 .decision-command { grid-template-columns: auto minmax(0, 1fr); }
-                .decision-score { grid-column: 1 / -1; width: 100%; min-width: 0; padding: 0.9rem 0 0; border-top: 1px solid rgba(255,255,255,0.16); border-left: 0; }
             }
         </style>
         """,
@@ -1480,9 +1470,7 @@ def inject_light_mode(enabled: bool) -> None:
             .decision-command.review { background: linear-gradient(110deg, #FFF8E8, #FFFFFF); border-color: #F5D48B; }
             .decision-command.block { background: linear-gradient(110deg, #FFF1F4, #FFFFFF); border-color: #F2B8C5; }
             .decision-command-title { color: #10213F; }
-            .decision-command-label, .decision-command-copy p, .decision-score-label { color: #465A7C; }
-            .decision-score { border-color: #DCE3F0; }
-            .decision-score-value { color: #10213F; }
+            .decision-command-label, .decision-command-copy p { color: #465A7C; }
             .case-focus { background: linear-gradient(110deg, #F0F2FF, #FFFFFF 54%, #EDFDFC); border-color: #CBD4F5; box-shadow: 0 12px 26px rgba(23, 44, 80, 0.08); }
             .case-focus-title, .case-focus-amount { color: #10213F; }
             .case-focus-meta, .case-focus-amount span { color: #4B5F80; }
@@ -1855,23 +1843,6 @@ def decision_badge(case: dict[str, Any]) -> None:
     normalized = str(case.get("decision") or "review").lower()
     if normalized not in {"allow", "block", "review"}:
         normalized = "review"
-    raw_score = case.get("model_risk_score")
-    try:
-        score = max(0.0, min(1.0, float(raw_score))) if raw_score is not None else None
-    except (TypeError, ValueError):
-        score = None
-    score_value = f"{score:.0%}" if score is not None else "--"
-    score_label = "Model risk score" if score is not None else "Model score unavailable"
-    score_width = f"{score:.1%}" if score is not None else "0%"
-    score_panel = ""
-    if score is not None:
-        score_panel = (
-            "<div class='decision-score'>"
-            f"<div class='decision-score-value'>{score_value}</div>"
-            f"<div class='decision-score-label'>{score_label}</div>"
-            f"<div class='decision-progress'><span style='width: {score_width}'></span></div>"
-            "</div>"
-        )
     copy = {
         "allow": "No material fraud pattern was detected. Confirm the recommendation or continue reviewing the transaction context.",
         "review": "Signals need analyst attention before this transaction can proceed. Review the evidence below, then record your decision.",
@@ -1885,7 +1856,6 @@ def decision_badge(case: dict[str, Any]) -> None:
         "<span class='decision-command-label'>System decision</span>"
         f"<div class='decision-command-title'>{normalized.upper()}</div>"
         f"<p>{copy}</p></div>"
-        f"{score_panel}"
         "</section>",
         unsafe_allow_html=True,
     )

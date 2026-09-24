@@ -62,7 +62,6 @@ def generate_plain_summary(case_result: dict[str, Any]) -> str:
     velocity_count = int(case_result.get("velocity_count", 0))
     device_card_count = int(case_result.get("device_card_count", 0))
     anomaly_score = case_result.get("anomaly_score")
-    confidence = max(0, min(100, round(gbt_score * 100)))
     confidence_word = (
         "elevated fraud risk"
         if gbt_score >= GBT_REVIEW_THRESHOLD
@@ -102,10 +101,10 @@ def generate_plain_summary(case_result: dict[str, Any]) -> str:
         signals.append(
             (
                 f"the transaction's characteristics matching historical fraud patterns "
-                f"with a {gbt_score:.3%} calibrated model probability",
+                "identified by the calibrated risk model",
                 (
-                    f"The calibrated risk model assigns this transaction a {gbt_score:.3%} "
-                    "fraud probability based on patterns seen in confirmed fraud cases."
+                    "The calibrated risk model identified patterns associated with "
+                    "confirmed fraud cases."
                 ),
             )
         )
@@ -146,7 +145,7 @@ def generate_plain_summary(case_result: dict[str, Any]) -> str:
             opening,
             clean_sentence,
             secondary_sentence,
-            f"The system is {confidence_word} ({confidence}%) in this risk assessment.",
+            f"The system is showing {confidence_word} in this risk assessment.",
             action,
         )
         if part
